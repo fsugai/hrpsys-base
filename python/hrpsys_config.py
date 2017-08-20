@@ -194,6 +194,10 @@ class HrpsysConfigurator(object):
     abc = None  # AutoBalancer
     st = None  # Stabilizer
 
+    cmg = None
+    cmg_svc = None
+    cmg_version = None
+
     tf_version = None
     kf_version = None
     vs_version = None
@@ -383,12 +387,14 @@ class HrpsysConfigurator(object):
         if rtm.findPort(self.rh.ref, "lfsensor") and rtm.findPort(
                                      self.rh.ref, "rfsensor") and self.st:
             connectPorts(self.kf.port("rpy"), self.st.port("rpy"))
+            connectPorts(self.kf.port("rpy"), self.cmg.port("rpy"))
             connectPorts(self.sh.port("zmpOut"), self.abc.port("zmpIn"))
             connectPorts(self.sh.port("basePosOut"), self.abc.port("basePosIn"))
             connectPorts(self.sh.port("baseRpyOut"), self.abc.port("baseRpyIn"))
             connectPorts(self.sh.port("optionalDataOut"), self.abc.port("optionalData"))
             connectPorts(self.abc.port("zmpOut"), self.st.port("zmpRef"))
             connectPorts(self.abc.port("baseRpyOut"), self.st.port("baseRpyIn"))
+            connectPorts(self.abc.port("baseRpyOut"), self.cmg.port("baseRpyIn"))
             connectPorts(self.abc.port("basePosOut"), self.st.port("basePosIn"))
             connectPorts(self.abc.port("accRef"), self.kf.port("accRef"))
             connectPorts(self.abc.port("contactStates"), self.st.port("contactStates"))
@@ -726,6 +732,7 @@ class HrpsysConfigurator(object):
             # ['te', "ThermoEstimator"],
             # ['tl', "ThermoLimiter"],
             ['el', "SoftErrorLimiter"],
+            ['cmg', "CMGcontroller"],
             ['log', "DataLogger"]
             ]
 
@@ -759,6 +766,7 @@ class HrpsysConfigurator(object):
             ['tl', "ThermoLimiter"],
             ['bp', "Beeper"],
             ['acf', "AccelerationFilter"],
+            ['cmg', "CMGcontroller"],
             ['log', "DataLogger"]
             ]
 
@@ -766,7 +774,7 @@ class HrpsysConfigurator(object):
         '''!@brief
         Get list of controller list that need to control joint angles
         '''
-        controller_list = [self.es, self.ic, self.gc, self.abc, self.st, self.co,
+        controller_list = [self.es, self.ic, self.gc, self.abc, self.cmg, self.st, self.co,
                            self.tc, self.hes, self.el]
         return filter(lambda c: c != None, controller_list)  # only return existing controllers
 
