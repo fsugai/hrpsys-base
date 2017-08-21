@@ -6,6 +6,8 @@ module OpenHRP
   interface CMGcontrollerService
   {
     void echo(in string msg);
+    void startCMGcontroller();
+    void stopCMGcontroller();
   };
 };
 

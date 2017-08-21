@@ -22,6 +22,8 @@ public:
 	virtual ~CMGcontrollerService_impl();
 
 	void echo(const char *msg);
+	void startCMGcontroller();
+	void stopCMGcontroller();
 	void cmg(CMGcontroller *i_cmg);
 private:
 	CMGcontroller *m_cmg;

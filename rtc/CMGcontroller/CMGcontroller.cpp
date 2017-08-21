@@ -40,6 +40,7 @@ CMGcontroller::CMGcontroller(RTC::Manager* manager)
     m_baseRpyIn("baseRpyIn", m_baseRpy),
     m_qRefOut("q", m_qRef),
     m_CMGServicePort("CMGService"),
+    cmg_mode(STOP),
     // </rtc-template>
     m_debugLevel(0)
 {
@@ -129,6 +130,17 @@ RTC::ReturnCode_t CMGcontroller::onShutdown(RTC::UniqueId ec_id)
   return RTC::RTC_OK;
 }
 */
+
+void CMGcontroller::startCMGcontroller()
+{
+    cmg_mode = START;
+}
+
+void CMGcontroller::stopCMGcontroller()
+{
+    cmg_mode = STOP;
+}
+
 RTC::ReturnCode_t CMGcontroller::onActivated(RTC::UniqueId ec_id)
 {
   std::cerr << "[" << m_profile.instance_name<< "] onActivated(" << ec_id << ")" << std::endl;
@@ -225,7 +237,7 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
     }
 
 
-    if(i > init_time/m_dt){
+    if(i > init_time/m_dt && cmg_mode == START){
         roll_q += roll_dq*m_dt;
         if(roll_q>1.4)
             roll_q = 1.4;

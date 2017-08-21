@@ -88,6 +88,8 @@ class CMGcontroller  : public RTC::DataFlowComponentBase
   // no corresponding operation exists in OpenRTm-aist-0.2.0
   // virtual RTC::ReturnCode_t onRateChanged(RTC::UniqueId ec_id);
 
+  void startCMGcontroller();
+  void stopCMGcontroller();
 
  protected:
   // Configuration variable declaration
@@ -137,7 +139,7 @@ class CMGcontroller  : public RTC::DataFlowComponentBase
   int roll_joint_id;
   int pitch_joint_id;
   int spin_joint_id;
-
+  enum c_mode {STOP, START} cmg_mode;
 };
 
 
