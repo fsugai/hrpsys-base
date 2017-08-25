@@ -5,9 +5,18 @@ module OpenHRP
 {
   interface CMGcontrollerService
   {
+    struct cmgParam {
+      double spin_rpm;
+      double deadband_th;
+      double back_dq;
+      double kp;
+    };
+
     void echo(in string msg);
     void startCMGcontroller();
     void stopCMGcontroller();
+    void getParameter(out cmgParam i_param);
+    void setParameter(in cmgParam i_param);
   };
 };
 

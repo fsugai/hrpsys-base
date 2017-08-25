@@ -28,6 +28,16 @@ void CMGcontrollerService_impl::stopCMGcontroller()
 	std::cout << "stop CMGcontroller" << std::endl;
 }
 
+void CMGcontrollerService_impl::getParameter(OpenHRP::CMGcontrollerService::cmgParam& i_param)
+{
+	return m_cmg->getParameter(i_param);
+};
+
+void CMGcontrollerService_impl::setParameter(const OpenHRP::CMGcontrollerService::cmgParam& i_cmgp)
+{
+	m_cmg->setParameter(i_cmgp);
+}
+
 void CMGcontrollerService_impl::cmg(CMGcontroller *i_cmg)
 {
 	m_cmg = i_cmg;

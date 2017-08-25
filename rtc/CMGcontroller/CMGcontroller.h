@@ -90,6 +90,8 @@ class CMGcontroller  : public RTC::DataFlowComponentBase
 
   void startCMGcontroller();
   void stopCMGcontroller();
+  void getParameter(OpenHRP::CMGcontrollerService::cmgParam& i_cmgp);
+  void setParameter(const OpenHRP::CMGcontrollerService::cmgParam& i_cmgp);
 
  protected:
   // Configuration variable declaration
@@ -131,6 +133,18 @@ class CMGcontroller  : public RTC::DataFlowComponentBase
   // </rtc-template>
 
  private:
+  // struct cmgParam {
+  //   double spin_rpm;
+  //   double cmg_th;
+  //   double kp;
+    
+  //   cmgParam()
+  //     : spin_rpm(5000),
+  //       cmg_th(0.01),
+  //       kp(10)
+  //   {};
+  // };
+        
   hrp::BodyPtr m_robot;
   double m_dt;
   hrp::Matrix33 input_baseRot;
@@ -140,6 +154,10 @@ class CMGcontroller  : public RTC::DataFlowComponentBase
   int pitch_joint_id;
   int spin_joint_id;
   enum c_mode {STOP, START} cmg_mode;
+  double spin_rpm;
+  double deadband_th;
+  double back_dq;
+  double kp;
 };
 
 

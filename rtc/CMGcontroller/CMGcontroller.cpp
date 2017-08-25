@@ -42,7 +42,11 @@ CMGcontroller::CMGcontroller(RTC::Manager* manager)
     m_CMGServicePort("CMGService"),
     cmg_mode(STOP),
     // </rtc-template>
-    m_debugLevel(0)
+    m_debugLevel(0),
+    spin_rpm(5000.0),
+    deadband_th(0.01),
+    back_dq(0.5),
+    kp(40.0)
 {
   m_service0.cmg(this);
 }
@@ -141,6 +145,22 @@ void CMGcontroller::stopCMGcontroller()
     cmg_mode = STOP;
 }
 
+void CMGcontroller::getParameter(OpenHRP::CMGcontrollerService::cmgParam& i_cmgp){
+    i_cmgp.spin_rpm = spin_rpm;
+    i_cmgp.deadband_th = deadband_th;
+    i_cmgp.back_dq = back_dq;
+    i_cmgp.kp = kp;
+    return;
+}
+
+void CMGcontroller::setParameter(const OpenHRP::CMGcontrollerService::cmgParam& i_cmgp){
+    spin_rpm = i_cmgp.spin_rpm;
+    deadband_th = i_cmgp.deadband_th;
+    back_dq = i_cmgp.back_dq;
+    kp = i_cmgp.kp;
+    return;
+}
+
 RTC::ReturnCode_t CMGcontroller::onActivated(RTC::UniqueId ec_id)
 {
   std::cerr << "[" << m_profile.instance_name<< "] onActivated(" << ec_id << ")" << std::endl;
@@ -182,7 +202,7 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
     const double ref_spin_dq = 2 * M_PI * 500.0 / 60.0; // 5000 [rpm] -> [rad/s]
     const int init_time =2;
     const int acc_time = 10;
-    const double cmg_th = 0.1;
+
 
     static double spin_q = 0.0;
     static double roll_q = 0.0;
@@ -201,7 +221,12 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
     }
 
     spin_q += spin_dq*m_dt;
-    m_qRef.data[spin_joint_id] = spin_q;
+    //m_qRef.data[spin_joint_id] = spin_q;
+    if(cmg_mode == START){
+        m_qRef.data[spin_joint_id] = -spin_rpm / 60.0 * 2.0 * M_PI; // 5000 [rpm] -> [rad/s]
+    }else{
+        m_qRef.data[spin_joint_id] = 0.0;
+    }
 
     hrp::Vector3 tau_waist;
     hrp::Vector3 tau_cmg;
@@ -216,8 +241,8 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
     R_cmg_waist = hrp::rotFromRpy(roll_q, pitch_q, 0.0);
 
     tau_waist = -hrp::Vector3::UnitZ().cross(act_base * hrp::Vector3::UnitZ());
-    if(tau_waist.norm() > sin(cmg_th)){
-        tau_waist = 40.0 * asin(tau_waist.norm()) * tau_waist.normalized();
+    if(tau_waist.norm() > sin(deadband_th)){
+        tau_waist = kp * asin(tau_waist.norm()) * tau_waist.normalized();
         tau_cmg = R_cmg_waist * tau_waist;
         cmg_dq = cmg_tau_dq * tau_cmg;
 
@@ -225,14 +250,14 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
         pitch_dq = -cmg_dq(1);
     }else{
         if(roll_q < -0.01){
-            roll_dq = 1.0;
+            roll_dq = back_dq;
         }else if(roll_q > 0.01){
-            roll_dq = -1.0;
+            roll_dq = -back_dq;
         }
         if(pitch_q < -0.01){
-            pitch_dq = 1.0;
+            pitch_dq = back_dq;
         }else if(pitch_q > 0.01){
-            pitch_dq = -1.0;
+            pitch_dq = -back_dq;
         }
     }
 

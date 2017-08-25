@@ -24,6 +24,8 @@ public:
 	void echo(const char *msg);
 	void startCMGcontroller();
 	void stopCMGcontroller();
+	void getParameter(OpenHRP::CMGcontrollerService::cmgParam& i_param);
+	void setParameter(const OpenHRP::CMGcontrollerService::cmgParam& i_param);
 	void cmg(CMGcontroller *i_cmg);
 private:
 	CMGcontroller *m_cmg;
