@@ -43,6 +43,7 @@ CMGcontroller::CMGcontroller(RTC::Manager* manager)
     cmg_mode(STOP),
     // </rtc-template>
     m_debugLevel(0),
+    is_sim(false),
     spin_rpm(5000.0),
     deadband_th(0.01),
     back_dq(0.5),
@@ -146,6 +147,7 @@ void CMGcontroller::stopCMGcontroller()
 }
 
 void CMGcontroller::getParameter(OpenHRP::CMGcontrollerService::cmgParam& i_cmgp){
+    i_cmgp.is_sim = is_sim;
     i_cmgp.spin_rpm = spin_rpm;
     i_cmgp.deadband_th = deadband_th;
     i_cmgp.back_dq = back_dq;
@@ -154,6 +156,7 @@ void CMGcontroller::getParameter(OpenHRP::CMGcontrollerService::cmgParam& i_cmgp
 }
 
 void CMGcontroller::setParameter(const OpenHRP::CMGcontrollerService::cmgParam& i_cmgp){
+    is_sim = i_cmgp.is_sim;
     spin_rpm = i_cmgp.spin_rpm;
     deadband_th = i_cmgp.deadband_th;
     back_dq = i_cmgp.back_dq;
@@ -196,10 +199,10 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
     hrp::Matrix33 act_base =  act_Rs * (senR.transpose() * m_robot->rootLink()->R);
     hrp::Vector3 act_base_rpy = hrp::rpyFromRot(act_base);
 
-    i++;
+    if(cmg_mode == START)
+        i++;
 
     const double cmg_J = 0.09;
-    const double ref_spin_dq = 2 * M_PI * 500.0 / 60.0; // 5000 [rpm] -> [rad/s]
     const int init_time =2;
     const int acc_time = 10;
 
@@ -208,22 +211,24 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
     static double roll_q = 0.0;
     static double pitch_q = 0.0;
 
+    double ref_spin_dq;
     double spin_dq = 0.0;
     double roll_dq = 0.0;
     double pitch_dq = 0.0;
 
-    if(i > init_time/m_dt && i < acc_time/m_dt){
-        spin_dq = ref_spin_dq * (i-init_time/m_dt) / (acc_time/m_dt-init_time/m_dt);
-    }else if(i >= acc_time/m_dt){
-        spin_dq = ref_spin_dq;
-    }else{
-        spin_dq = 0.0;
-    }
-
-    spin_q += spin_dq*m_dt;
-    //m_qRef.data[spin_joint_id] = spin_q;
     if(cmg_mode == START){
-        m_qRef.data[spin_joint_id] = -spin_rpm / 60.0 * 2.0 * M_PI; // 5000 [rpm] -> [rad/s]
+        if(is_sim){
+            ref_spin_dq = 2 * M_PI * (spin_rpm/10.0) / 60.0;
+            if(i > init_time/m_dt && i < acc_time/m_dt){
+                spin_dq = ref_spin_dq * (i-init_time/m_dt) / (acc_time/m_dt-init_time/m_dt);
+            }else if(i >= acc_time/m_dt){
+                spin_dq = ref_spin_dq;
+            }
+            spin_q += spin_dq*m_dt;
+            m_qRef.data[spin_joint_id] = spin_q;
+        }else{
+            m_qRef.data[spin_joint_id] = -spin_rpm / 60.0 * 2.0 * M_PI; // 5000 [rpm] -> [rad/s]
+        }
     }else{
         m_qRef.data[spin_joint_id] = 0.0;
     }

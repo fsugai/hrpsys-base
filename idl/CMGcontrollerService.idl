@@ -6,6 +6,7 @@ module OpenHRP
   interface CMGcontrollerService
   {
     struct cmgParam {
+      boolean is_sim;
       double spin_rpm;
       double deadband_th;
       double back_dq;
