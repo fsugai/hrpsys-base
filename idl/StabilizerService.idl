@@ -83,6 +83,14 @@ module OpenHRP
         unsigned short ik_loop_count;
     };
 
+    struct CMGParam{
+        boolean is_sim;
+        double spin_rpm;
+        double deadband_th;
+        double back_dq;
+        double kp;
+    };
+
     /**
      * @struct stParam
      * @brief Stabilizer Parameters.
@@ -237,6 +245,8 @@ module OpenHRP
       DblArray2 root_rot_compensation_limit;
       /// Whether truncate zmp according to foot support polygon or not
       boolean use_zmp_truncation;
+      /// CMG parameter
+      CMGParam cmgp;
     };
 
     /**
@@ -266,6 +276,9 @@ module OpenHRP
      * @return
      */
     void stopStabilizer();
+
+    void startCMG();
+    void stopCMG();
     boolean dummy();
   };
 };

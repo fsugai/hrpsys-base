@@ -105,6 +105,8 @@ class Stabilizer
 
   void startStabilizer(void);
   void stopStabilizer(void);
+  void startCMG(void);
+  void stopCMG(void);
   void getCurrentParameters ();
   void getActualParameters ();
   void getTargetParameters ();
@@ -281,6 +283,7 @@ class Stabilizer
   };
   struct CMGParam{
     bool is_cmg_active;
+    bool is_sim;
     int roll_joint_id, pitch_joint_id, spin_joint_id;
     enum c_mode {STOP, START} cmg_mode;
     double spin_rpm;

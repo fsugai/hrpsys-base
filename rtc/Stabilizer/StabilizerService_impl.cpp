@@ -21,6 +21,16 @@ void StabilizerService_impl::stopStabilizer(void)
 	m_stabilizer->stopStabilizer();
 }
 
+void StabilizerService_impl::startCMG(void)
+{
+	m_stabilizer->startCMG();
+}
+
+void StabilizerService_impl::stopCMG(void)
+{
+	m_stabilizer->stopCMG();
+}
+
 void StabilizerService_impl::getParameter(OpenHRP::StabilizerService::stParam_out i_param)
 {
   i_param = new OpenHRP::StabilizerService::stParam();

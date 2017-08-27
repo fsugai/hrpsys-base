@@ -525,6 +525,15 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   if (sen == NULL) {
       std::cerr << "[" << m_profile.instance_name << "] WARNING! This robot model has no GyroSensor named 'gyrometer'! " << std::endl;
   }
+
+  // for CMG parameter
+  cmgp.is_sim = false;
+  cmgp.cmg_mode = CMGParam::STOP;
+  cmgp.spin_rpm = 5000;
+  cmgp.deadband_th = 0.01;
+  cmgp.back_dq = 0.5;
+  cmgp.kp = 40.0;
+
   return RTC::RTC_OK;
 }
 
@@ -666,7 +675,6 @@ RTC::ReturnCode_t Stabilizer::onExecute(RTC::UniqueId ec_id)
           if (is_air_counter < detection_count_to_air) ++is_air_counter;
           else control_mode = MODE_SYNC_TO_AIR;
       } else is_air_counter = 0;
-      calcCMGControl();
       break;
     case MODE_SYNC_TO_IDLE:
       sync_2_idle();
@@ -677,6 +685,7 @@ RTC::ReturnCode_t Stabilizer::onExecute(RTC::UniqueId ec_id)
       control_mode = MODE_AIR;
       break;
     }
+    calcCMGControl();
   }
   if ( m_robot->numJoints() == m_qRef.data.length() ) {
     if (is_legged_robot) {
@@ -1877,7 +1886,6 @@ void Stabilizer::calcCMGControl(void)
     static int i=0;
 
     const double cmg_J = 0.09;
-    const double ref_spin_dq = 2 * M_PI * 500.0 / 60.0; // 5000 [rpm] -> [rad/s]
     const int init_time =2;
     const int acc_time = 10;
 
@@ -1886,26 +1894,36 @@ void Stabilizer::calcCMGControl(void)
     static double roll_q = 0.0;
     static double pitch_q = 0.0;
 
+    double ref_spin_dq;
     double spin_dq = 0.0;
     double roll_dq = 0.0;
     double pitch_dq = 0.0;
 
-    i++;
+    if(cmgp.cmg_mode == CMGParam::START)
+        i++;
 
+    ref_spin_dq = 2 * M_PI * cmgp.spin_rpm / 60.0; // [rpm] -> [rad/s]
     if(i > init_time/dt && i < acc_time/dt){
-        spin_dq = ref_spin_dq * (i-init_time/dt) / (acc_time/dt-init_time/dt);
+        spin_dq = (ref_spin_dq/10.0) * (i-init_time/dt) / (acc_time/dt-init_time/dt);
     }else if(i >= acc_time/dt){
-        spin_dq = ref_spin_dq;
+        spin_dq = (ref_spin_dq/10.0);
     }else{
         spin_dq = 0.0;
     }
 
-    spin_q += spin_dq*dt;
-    //m_qRef.data[spin_joint_id] = spin_q;
     if(cmgp.cmg_mode == CMGParam::START){
-        m_qRef.data[cmgp.spin_joint_id] = -cmgp.spin_rpm / 60.0 * 2.0 * M_PI; // 5000 [rpm] -> [rad/s]
+        if(cmgp.is_sim){
+            spin_q += spin_dq*dt;
+            m_robot->joint(cmgp.spin_joint_id)->q = spin_q;
+        }else{
+            m_robot->joint(cmgp.spin_joint_id)->q = -ref_spin_dq;
+        }
     }else{
-        m_qRef.data[cmgp.spin_joint_id] = 0.0;
+        if(cmgp.is_sim){
+            m_robot->joint(cmgp.spin_joint_id)->q = spin_q;
+        }else{
+            m_robot->joint(cmgp.spin_joint_id)->q = 0.0;
+        }
     }
 
     hrp::Vector3 tau_waist;
@@ -1948,14 +1966,14 @@ void Stabilizer::calcCMGControl(void)
             roll_q = 1.4;
         else if(roll_q < -1.4)
             roll_q = -1.4;
-        m_qRef.data[cmgp.roll_joint_id] = roll_q;
+        m_robot->joint(cmgp.roll_joint_id)->q = roll_q;
 
         pitch_q += pitch_dq*dt;
         if(pitch_q>1.4)
             pitch_q = 1.4;
         else if(pitch_q < -1.4)
             pitch_q = -1.4;
-        m_qRef.data[cmgp.pitch_joint_id] = pitch_q;
+        m_robot->joint(cmgp.pitch_joint_id)->q = pitch_q;
     }
 
 }
@@ -1986,6 +2004,16 @@ void Stabilizer::stopStabilizer(void)
     }
     waitSTTransition();
     std::cerr << "[" << m_profile.instance_name << "] " << "Stop ST DONE"  << std::endl;
+}
+
+void Stabilizer::startCMG(void)
+{
+    cmgp.cmg_mode = CMGParam::START;
+}
+
+void Stabilizer::stopCMG(void)
+{
+    cmgp.cmg_mode = CMGParam::STOP;
 }
 
 void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
@@ -2174,6 +2202,11 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
       ilp.manipulability_limit = jpe_v[i]->getManipulabilityLimit();
       ilp.ik_loop_count = stikp[i].ik_loop_count; // size_t -> unsigned short, value may change, but ik_loop_count is small value and value not change
   }
+  i_stp.cmgp.is_sim = cmgp.is_sim;
+  i_stp.cmgp.spin_rpm = cmgp.spin_rpm;
+  i_stp.cmgp.deadband_th = cmgp.deadband_th;
+  i_stp.cmgp.back_dq = cmgp.back_dq;
+  i_stp.cmgp.kp = cmgp.kp;
 };
 
 void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
@@ -2476,6 +2509,11 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
       }
       std::cerr << "]" << std::endl;
   }
+  cmgp.is_sim = i_stp.cmgp.is_sim;
+  cmgp.spin_rpm = i_stp.cmgp.spin_rpm;
+  cmgp.deadband_th = i_stp.cmgp.deadband_th;
+  cmgp.back_dq = i_stp.cmgp.back_dq;
+  cmgp.kp = i_stp.cmgp.kp;
 }
 
 std::string Stabilizer::getStabilizerAlgorithmString (OpenHRP::StabilizerService::STAlgorithm _st_algorithm)

@@ -23,6 +23,8 @@ public:
 
 	void startStabilizer(void);
 	void stopStabilizer(void);
+	void startCMG(void);
+	void stopCMG(void);
 	void getParameter(OpenHRP::StabilizerService::stParam_out i_param);
 	void setParameter(const OpenHRP::StabilizerService::stParam& i_param);
 	void stabilizer(Stabilizer *i_stabilizer);
