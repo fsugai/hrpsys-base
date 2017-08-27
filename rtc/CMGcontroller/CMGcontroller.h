@@ -104,8 +104,13 @@ class CMGcontroller  : public RTC::DataFlowComponentBase
   InPort<TimedDoubleSeq> m_qRefIn;
   TimedOrientation3D m_rpy;
   TimedOrientation3D m_baseRpy;
+  TimedPoint3D m_zmpRef;
+  TimedPoint3D m_zmp;
   InPort<TimedOrientation3D> m_rpyIn;
   InPort<TimedOrientation3D> m_baseRpyIn;
+  InPort<TimedPoint3D> m_zmpRefIn;
+  InPort<TimedPoint3D> m_zmpIn;
+
   // </rtc-template>
 
   // DataOutPort declaration

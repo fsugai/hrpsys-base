@@ -38,6 +38,8 @@ CMGcontroller::CMGcontroller(RTC::Manager* manager)
     m_qRefIn("qRef", m_qRef),
     m_rpyIn("rpy", m_rpy),
     m_baseRpyIn("baseRpyIn", m_baseRpy),
+    m_zmpRefIn("zmpRef", m_zmpRef),
+    m_zmpIn("zmp", m_zmp),
     m_qRefOut("q", m_qRef),
     m_CMGServicePort("CMGService"),
     cmg_mode(STOP),
@@ -67,7 +69,8 @@ RTC::ReturnCode_t CMGcontroller::onInitialize()
   addInPort("qRef", m_qRefIn);
   addInPort("rpy", m_rpyIn);
   addInPort("baseRpyIn", m_baseRpyIn);
-
+  addInPort("zmpRef", m_zmpRefIn);
+  addInPort("zmp", m_zmpIn);
   // Set OutPort buffer
   addOutPort("q", m_qRefOut);
 
@@ -189,6 +192,12 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
     if (m_rpyIn.isNew()) {
         m_rpyIn.read();
     }
+    if (m_zmpRefIn.isNew()) {
+        m_zmpRefIn.read();
+    }
+    if (m_zmpIn.isNew()) {
+        m_zmpIn.read();
+    }
     Guard guard(m_mutex);
 
     m_robot->rootLink()->p = hrp::Vector3::Zero();
@@ -245,7 +254,11 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
 
     R_cmg_waist = hrp::rotFromRpy(roll_q, pitch_q, 0.0);
 
-    tau_waist = -hrp::Vector3::UnitZ().cross(act_base * hrp::Vector3::UnitZ());
+    //    tau_waist = -hrp::Vector3::UnitZ().cross(act_base * hrp::Vector3::UnitZ());
+    tau_waist(0) = kp*(m_zmp.data.y - m_zmpRef.data.y);
+    tau_waist(1) = kp*(m_zmp.data.x - m_zmpRef.data.x);
+    tau_waist(2) = 0.0;
+
     if(tau_waist.norm() > sin(deadband_th)){
         tau_waist = kp * asin(tau_waist.norm()) * tau_waist.normalized();
         tau_cmg = R_cmg_waist * tau_waist;
@@ -282,6 +295,8 @@ RTC::ReturnCode_t CMGcontroller::onExecute(RTC::UniqueId ec_id)
             pitch_q = -1.4;
         m_qRef.data[pitch_joint_id] = pitch_q;
     }
+
+    //    std::cerr << m_zmp.data.x - m_zmpRef.data.x << "\t" << m_zmp.data.y - m_zmpRef.data.y << std::endl;
 
     m_qRefOut.write();
  
