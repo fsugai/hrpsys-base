@@ -120,6 +120,7 @@ class Stabilizer
   void calcEEForceMomentControl();
   void calcSwingEEModification ();
   void limbStretchAvoidanceControl (const std::vector<hrp::Vector3>& ee_p, const std::vector<hrp::Matrix33>& ee_R);
+  void calcCMGControl();
   void getParameter(OpenHRP::StabilizerService::stParam& i_stp);
   void setParameter(const OpenHRP::StabilizerService::stParam& i_stp);
   void setBoolSequenceParam (std::vector<bool>& st_bool_values, const OpenHRP::StabilizerService::BoolSequence& output_bool_values, const std::string& prop_name);
@@ -278,6 +279,15 @@ class Stabilizer
     double avoid_gain, reference_gain, max_limb_length, limb_length_margin;
     size_t ik_loop_count;
   };
+  struct CMGParam{
+    bool is_cmg_active;
+    int roll_joint_id, pitch_joint_id, spin_joint_id;
+    enum c_mode {STOP, START} cmg_mode;
+    double spin_rpm;
+    double deadband_th;
+    double back_dq;
+    double kp;
+  };
   enum cmode {MODE_IDLE, MODE_AIR, MODE_ST, MODE_SYNC_TO_IDLE, MODE_SYNC_TO_AIR} control_mode;
   // members
   std::map<std::string, hrp::VirtualForceSensorParam> m_vfs;
@@ -332,6 +342,7 @@ class Stabilizer
   double total_mass, transition_time, cop_check_margin, contact_decision_threshold;
   std::vector<double> cp_check_margin, tilt_margin;
   OpenHRP::StabilizerService::EmergencyCheckMode emergency_check_mode;
+  CMGParam cmgp;
 };
 
 

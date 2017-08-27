@@ -194,6 +194,33 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
     return RTC::RTC_ERROR;
   }
 
+  // find cmg joints
+  cmgp.is_cmg_active = true;
+  if(m_robot->link("CMG_JOINT0") != NULL){
+      cmgp.roll_joint_id = m_robot->link("CMG_JOINT0")->jointId;
+  }else{
+      cmgp.roll_joint_id = -1;
+      cmgp.is_cmg_active = false;
+  }
+  if(m_robot->link("CMG_JOINT1") != NULL){
+      cmgp.pitch_joint_id = m_robot->link("CMG_JOINT1")->jointId;
+  }else{
+      cmgp.pitch_joint_id = -1;
+      cmgp.is_cmg_active = false;
+  }
+  if(m_robot->link("CMG_JOINT2") != NULL){
+      cmgp.spin_joint_id = m_robot->link("CMG_JOINT2")->jointId;
+  }else{
+      cmgp.spin_joint_id = -1;
+      cmgp.is_cmg_active = false;
+  }
+
+  if(cmgp.is_cmg_active){
+      std::cerr << "[" << m_profile.instance_name << "] CMG roll  joint: " << cmgp.roll_joint_id << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "] CMG pitch joint: " << cmgp.pitch_joint_id << std::endl;
+      std::cerr << "[" << m_profile.instance_name << "] CMG spin  joint: " << cmgp.spin_joint_id << std::endl;
+  }
+
   // Setting for wrench data ports (real + virtual)
   std::vector<std::string> force_sensor_names;
 
@@ -639,6 +666,7 @@ RTC::ReturnCode_t Stabilizer::onExecute(RTC::UniqueId ec_id)
           if (is_air_counter < detection_count_to_air) ++is_air_counter;
           else control_mode = MODE_SYNC_TO_AIR;
       } else is_air_counter = 0;
+      calcCMGControl();
       break;
     case MODE_SYNC_TO_IDLE:
       sync_2_idle();
@@ -1842,6 +1870,94 @@ void Stabilizer::sync_2_idle ()
   for (int i = 0; i < m_robot->numJoints(); i++ ) {
     transition_joint_q[i] = m_robot->joint(i)->q;
   }
+}
+
+void Stabilizer::calcCMGControl(void)
+{
+    static int i=0;
+
+    const double cmg_J = 0.09;
+    const double ref_spin_dq = 2 * M_PI * 500.0 / 60.0; // 5000 [rpm] -> [rad/s]
+    const int init_time =2;
+    const int acc_time = 10;
+
+
+    static double spin_q = 0.0;
+    static double roll_q = 0.0;
+    static double pitch_q = 0.0;
+
+    double spin_dq = 0.0;
+    double roll_dq = 0.0;
+    double pitch_dq = 0.0;
+
+    i++;
+
+    if(i > init_time/dt && i < acc_time/dt){
+        spin_dq = ref_spin_dq * (i-init_time/dt) / (acc_time/dt-init_time/dt);
+    }else if(i >= acc_time/dt){
+        spin_dq = ref_spin_dq;
+    }else{
+        spin_dq = 0.0;
+    }
+
+    spin_q += spin_dq*dt;
+    //m_qRef.data[spin_joint_id] = spin_q;
+    if(cmgp.cmg_mode == CMGParam::START){
+        m_qRef.data[cmgp.spin_joint_id] = -cmgp.spin_rpm / 60.0 * 2.0 * M_PI; // 5000 [rpm] -> [rad/s]
+    }else{
+        m_qRef.data[cmgp.spin_joint_id] = 0.0;
+    }
+
+    hrp::Vector3 tau_waist;
+    hrp::Vector3 tau_cmg;
+    hrp::Vector3 cmg_dq;
+    hrp::Matrix33 cmg_tau_dq;
+    hrp::Matrix33 R_cmg_waist;
+
+    cmg_tau_dq << 0.0, 1/cmg_J/ref_spin_dq, 0.0,
+        1/cmg_J/ref_spin_dq, 0.0, 0.0,
+        0.0, 0.0, 0.0;
+
+    R_cmg_waist = hrp::rotFromRpy(roll_q, pitch_q, 0.0);
+
+    tau_waist = -hrp::Vector3::UnitZ().cross(m_robot->rootLink()->R * hrp::Vector3::UnitZ());
+    if(tau_waist.norm() > sin(cmgp.deadband_th)){
+        tau_waist = cmgp.kp * asin(tau_waist.norm()) * tau_waist.normalized();
+        tau_cmg = R_cmg_waist * tau_waist;
+        cmg_dq = cmg_tau_dq * tau_cmg;
+
+        roll_dq = cmg_dq(0);
+        pitch_dq = -cmg_dq(1);
+    }else{
+        if(roll_q < -0.01){
+            roll_dq = cmgp.back_dq;
+        }else if(roll_q > 0.01){
+            roll_dq = -cmgp.back_dq;
+        }
+        if(pitch_q < -0.01){
+            pitch_dq = cmgp.back_dq;
+        }else if(pitch_q > 0.01){
+            pitch_dq = -cmgp.back_dq;
+        }
+    }
+
+
+    if(i > init_time/dt && cmgp.cmg_mode == CMGParam::START){
+        roll_q += roll_dq*dt;
+        if(roll_q>1.4)
+            roll_q = 1.4;
+        else if(roll_q < -1.4)
+            roll_q = -1.4;
+        m_qRef.data[cmgp.roll_joint_id] = roll_q;
+
+        pitch_q += pitch_dq*dt;
+        if(pitch_q>1.4)
+            pitch_q = 1.4;
+        else if(pitch_q < -1.4)
+            pitch_q = -1.4;
+        m_qRef.data[cmgp.pitch_joint_id] = pitch_q;
+    }
+
 }
 
 void Stabilizer::startStabilizer(void)
