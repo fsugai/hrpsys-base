@@ -527,12 +527,20 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   }
 
   // for CMG parameter
-  cmgp.is_sim = false;
   cmgp.cmg_mode = CMGParam::STOP;
   cmgp.spin_rpm = 5000;
   cmgp.deadband_th = 0.01;
   cmgp.back_dq = 0.5;
   cmgp.kp = 40.0;
+
+  // is_sim
+  if(rtcManager.getComponent("RobotHardware0") == NULL){
+      cmgp.is_sim = true;
+      std::cerr << "[" << m_profile.instance_name << "] cannot find RobotHardware0" << std::endl;
+  }else{
+      cmgp.is_sim = false;
+      std::cerr << "[" << m_profile.instance_name << "] found RobotHardware0" << std::endl;
+  }
 
   return RTC::RTC_OK;
 }
