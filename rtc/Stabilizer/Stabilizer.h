@@ -290,6 +290,10 @@ class Stabilizer
     double deadband_th;
     double back_dq;
     double kp;
+    double ki;
+    double kd;
+    double kdd;
+    hrp::Vector3 test_tau;
   };
   enum cmode {MODE_IDLE, MODE_AIR, MODE_ST, MODE_SYNC_TO_IDLE, MODE_SYNC_TO_AIR} control_mode;
   // members

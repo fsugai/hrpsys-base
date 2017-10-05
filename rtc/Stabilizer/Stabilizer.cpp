@@ -528,10 +528,14 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
 
   // for CMG parameter
   cmgp.cmg_mode = CMGParam::STOP;
-  cmgp.spin_rpm = 5000;
-  cmgp.deadband_th = 0.01;
-  cmgp.back_dq = 0.5;
-  cmgp.kp = 40.0;
+  cmgp.spin_rpm = 10000;
+  cmgp.deadband_th = 0.05;
+  cmgp.back_dq = 0.25;
+  cmgp.kp = 1000.0;
+  cmgp.ki = 0.0;
+  cmgp.kd = 0.0;
+  cmgp.kdd = 0.0;
+  cmgp.test_tau = hrp::Vector3::Zero();
 
   // is_sim
   if(rtcManager.getComponent("RobotHardware0") == NULL){
@@ -1936,24 +1940,94 @@ void Stabilizer::calcCMGControl(void)
 
     hrp::Vector3 tau_waist;
     hrp::Vector3 tau_cmg;
-    hrp::Vector3 cmg_dq;
+    static hrp::Vector3 pre_tau_waist;
+    static hrp::Vector3 cmg_dq;
     hrp::Matrix33 cmg_tau_dq;
     hrp::Matrix33 R_cmg_waist;
+
+    m_robot->calcForwardKinematics();
+    hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
+    hrp::Matrix33 senR = sen->link->R * sen->localR;
+    hrp::Matrix33 act_Rs(hrp::rotFromRpy(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y));
+    hrp::Matrix33 rootR = sen->link->R * sen->localR;
+    rootR = act_Rs * (senR.transpose() * m_robot->rootLink()->R);
+    m_robot->calcForwardKinematics();
 
     cmg_tau_dq << 0.0, 1/cmg_J/ref_spin_dq, 0.0,
         1/cmg_J/ref_spin_dq, 0.0, 0.0,
         0.0, 0.0, 0.0;
 
     R_cmg_waist = hrp::rotFromRpy(roll_q, pitch_q, 0.0);
+    //std::cerr << R_cmg_waist << std::endl;
+    
+    //tau_waist = cmgp.test_tau;
 
-    tau_waist = -hrp::Vector3::UnitZ().cross(m_robot->rootLink()->R * hrp::Vector3::UnitZ());
+    tau_waist = -hrp::Vector3::UnitZ().cross(rootR * hrp::Vector3::UnitZ());
+
+    // tau_waist(0) = -cmgp.kp*(act_zmp(1) - m_zmpRef.data.y);
+    // tau_waist(1) = -cmgp.kp*(act_zmp(0) - m_zmpRef.data.x);
+    // tau_waist(2) = 0.0;
+
+    //std::cerr << m_zmpRef.data.x << "\t" << m_zmpRef.data.y << std::endl;
+    //std::cerr << m_robot->rootLink()->R << std::endl;
+    
+    static double ref_pitch=0.0;
+    hrp::Vector3 root_rpy;
+    static hrp::Vector3 pre_root_rpy;
+    static hrp::Vector3 int_root_rpy=hrp::Vector3::Zero();
+    root_rpy = hrp::rpyFromRot(rootR);
+
+    //offset
+    root_rpy -= cmgp.test_tau;
+
+    int_root_rpy += root_rpy * dt;
+    if(roll_q > M_PI/4.0)
+        ref_pitch = cmgp.back_dq;
+    else if(roll_q < -M_PI/4.0)
+        ref_pitch = -cmgp.back_dq;
+
     if(tau_waist.norm() > sin(cmgp.deadband_th)){
-        tau_waist = cmgp.kp * asin(tau_waist.norm()) * tau_waist.normalized();
-        tau_cmg = R_cmg_waist * tau_waist;
-        cmg_dq = cmg_tau_dq * tau_cmg;
+    //if(tau_waist.norm() != 0.0){
+        //tau_waist = cmgp.kp * asin(tau_waist.norm()) * tau_waist.normalized();
+    //if(fabs(act_zmp(0) - m_zmpRef.data.x) > cmgp.deadband_th || fabs(act_zmp(1) - m_zmpRef.data.y) > cmgp.deadband_th){
+            //cmg_tau_dq * tau_cmg;
+        if(int_root_rpy(1) > 1.0){
+            int_root_rpy(1) = 1.0;
+        }else if(int_root_rpy(1) < -1.0){
+            int_root_rpy(1) = -1.0;
+        }
+
+        cmg_dq(0) = -(cmgp.kp*(root_rpy(1)-ref_pitch) + cmgp.ki*int_root_rpy(1) + cmgp.kd*(root_rpy(1)-pre_root_rpy(1))/dt)/cmg_J/ref_spin_dq/cos(roll_q) + cmgp.kdd*cmg_dq(0);
+        pre_root_rpy = root_rpy;
+        cmg_dq(1) = 0.0;
+
+
+        // std::cerr << "roll"<< std::endl << roll_q << std::endl;
+        // std::cerr << "pitch"<< std::endl << pitch_q << std::endl;
+        // std::cerr << "waist" << std::endl << tau_waist << std::endl;
+        // std::cerr << "cmg" << std::endl << tau_cmg << std::endl;
+        // std::cerr << "dq" << std::endl << cmg_dq << std::endl;
+
+        if(cmg_dq(0)>3.0){
+            cmg_dq(0)=3.0;
+        }else if(cmg_dq(0)<-3.0){
+            cmg_dq(0)=-3.0;
+        }
+        if(cmg_dq(1)>3.0){
+            cmg_dq(1)=3.0;
+        }else if(cmg_dq(1)<-3.0){
+            cmg_dq(1)=-3.0;
+        }
+        if(cmg_dq(2)>3.0){
+            cmg_dq(2)=3.0;
+        }else if(cmg_dq(2)<-3.0){
+            cmg_dq(2)=-3.0;
+        }
 
         roll_dq = cmg_dq(0);
-        pitch_dq = -cmg_dq(1);
+        pitch_dq = 0.0;//-cmg_dq(1);
+
+
     }else{
         if(roll_q < -0.01){
             roll_dq = cmgp.back_dq;
@@ -1969,11 +2043,16 @@ void Stabilizer::calcCMGControl(void)
 
 
     if(i > init_time/dt && cmgp.cmg_mode == CMGParam::START){
+        if(roll_q>1.0){
+            roll_dq = roll_dq*(1.4-roll_q)/0.4;
+        }else if(roll_q<-1.0){
+            roll_dq = roll_dq*(1.4+roll_q)/0.4;
+        }
         roll_q += roll_dq*dt;
-        if(roll_q>1.4)
-            roll_q = 1.4;
-        else if(roll_q < -1.4)
-            roll_q = -1.4;
+        if(roll_q>1.35)
+            roll_q = 1.35;
+        else if(roll_q < -1.35)
+            roll_q = -1.35;
         m_robot->joint(cmgp.roll_joint_id)->q = roll_q;
 
         pitch_q += pitch_dq*dt;
@@ -2215,6 +2294,12 @@ void Stabilizer::getParameter(OpenHRP::StabilizerService::stParam& i_stp)
   i_stp.cmgp.deadband_th = cmgp.deadband_th;
   i_stp.cmgp.back_dq = cmgp.back_dq;
   i_stp.cmgp.kp = cmgp.kp;
+  i_stp.cmgp.ki = cmgp.ki;
+  i_stp.cmgp.kd = cmgp.kd;
+  i_stp.cmgp.kdd = cmgp.kdd;
+  for (size_t i = 0; i < 3; i++) {
+      i_stp.cmgp.test_tau[i] = cmgp.test_tau(1);
+  }
 };
 
 void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
@@ -2522,6 +2607,12 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
   cmgp.deadband_th = i_stp.cmgp.deadband_th;
   cmgp.back_dq = i_stp.cmgp.back_dq;
   cmgp.kp = i_stp.cmgp.kp;
+  cmgp.ki = i_stp.cmgp.ki;
+  cmgp.kd = i_stp.cmgp.kd;
+  cmgp.kdd = i_stp.cmgp.kdd;
+  for (size_t i = 0; i < 3; i++) {
+      cmgp.test_tau(i) = i_stp.cmgp.test_tau[i];
+  }
 }
 
 std::string Stabilizer::getStabilizerAlgorithmString (OpenHRP::StabilizerService::STAlgorithm _st_algorithm)

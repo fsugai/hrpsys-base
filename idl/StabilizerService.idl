@@ -89,6 +89,10 @@ module OpenHRP
         double deadband_th;
         double back_dq;
         double kp;
+        double ki;
+        double kd;
+        double kdd;
+        DblArray3 test_tau;
     };
 
     /**
